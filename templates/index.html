@@ -5,6 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>虚拟员工平台</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <style>
+        /* Additional styles for research assistant card */
+        .research-card-content textarea {
+            width: 90%; /* Adjusted for padding */
+            min-height: 60px;
+            margin-bottom: 10px;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box; /* Include padding and border in the element's total width and height */
+        }
+        .research-card-content button {
+            background-color: #007bff; /* Blue for research submit */
+            color: white;
+            /* Inherits padding, border, etc. from .start-agent-btn or can be set explicitly */
+        }
+        .research-card-content button:hover {
+            background-color: #0056b3;
+        }
+        .research-results-output { /* Changed ID to class for potential multiple instances if logic changes */
+            margin-top: 15px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            min-height: 30px; /* Ensure it's visible even when empty */
+            word-wrap: break-word; /* Prevent long strings from breaking layout */
+        }
+        .research-results-output h4 { margin-top: 0; }
+        .research-results-output ul { padding-left: 20px; margin-top: 5px; margin-bottom: 5px; }
+        .research-results-output p { margin-top: 5px; margin-bottom: 5px; }
+
+        /* General status div styling */
+         #status-messages {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            background-color: #f0f0f0;
+            min-height: 50px;
+            word-wrap: break-word;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -13,80 +55,123 @@
     <main>
         <div class="agent-card-container">
             {% for agent in agents %}
-            <div class="agent-card" id="{{ agent.id }}">
+            <div class="agent-card" id="agent-{{ agent.id }}">
                 <h2>{{ agent.name }}</h2>
                 <p>{{ agent.description }}</p>
-                <button class="start-agent-btn" data-agent-type="{{ agent.id }}">启动代理</button>
+                {% if agent.type == "standard" %}
+                    <button class="start-agent-btn" data-agent-type="{{ agent.id }}">启动标准代理</button>
+                {% elif agent.type == "research" %}
+                    <div class="research-card-content">
+                        <textarea id="research-task-input-{{ agent.id }}" placeholder="请输入您的研究任务描述..."></textarea>
+                        <button class="submit-research-btn" data-agent-id="{{ agent.id }}">提交研究任务</button>
+                        <div id="research-results-output-{{ agent.id }}" class="research-results-output">请提交研究任务以查看结果。</div>
+                    </div>
+                {% endif %}
             </div>
             {% endfor %}
         </div>
-        <div id="status-messages" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; min-height: 50px;">
-            <!-- SSE messages will appear here -->
-            请选择一个代理并点击“启动代理”按钮。
+        <div id="status-messages">
+            标准代理的状态更新将显示在这里。
         </div>
     </main>
     <footer>
-        <p>&copy; 2023 AI 代理平台</p>
+        <p>&copy; 2024 AI 代理平台</p> <!-- Updated year -->
     </footer>
     <script>
-        const statusDiv = document.getElementById('status-messages');
-        let eventSource = null; // Keep track of the EventSource object
+        const globalStatusDiv = document.getElementById('status-messages');
+        let globalEventSource = null; // Keep track of the EventSource object for standard agents
 
+        // Handler for standard agent "启动代理" buttons
         document.querySelectorAll('.start-agent-btn').forEach(button => {
             button.addEventListener('click', async () => {
                 const agentType = button.getAttribute('data-agent-type');
-                statusDiv.innerHTML = `请求启动 ${agentType} 类型的代理...`;
+                globalStatusDiv.innerHTML = `请求启动 ${agentType} 类型的标准代理...`;
 
-                // Close any existing SSE connection
-                if (eventSource) {
-                    eventSource.close();
-                    console.log("Previous SSE connection closed.");
+                if (globalEventSource) {
+                    globalEventSource.close();
+                    console.log("Previous standard agent SSE connection closed.");
                 }
 
                 try {
+                    // Standard agent start API (different from research)
                     const response = await fetch(`/api/agent/start/${agentType}`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        }
+                        headers: { 'Content-Type': 'application/json' }
                     });
                     if (response.ok) {
                         const data = await response.json();
-                        statusDiv.innerHTML = `后端响应: ${data.message} (Agent: ${data.agent_type}, Session ID: ${data.session_id})<br>`;
+                        globalStatusDiv.innerHTML = `标准代理响应: ${data.message} (Type: ${data.agent_type}, Session ID: ${data.session_id})<br>`;
 
-                        // Connect to SSE endpoint, now including agent_type in the URL
-                        console.log(`Connecting to SSE for agent_type: ${data.agent_type}, session_id: ${data.session_id}`);
-                        // Corrected SSE URL to include agent_type as per updated app/main.py
-                        eventSource = new EventSource(`/api/agent/status/${data.agent_type}/${data.session_id}`);
+                        // SSE connection for standard agents, includes agent_type in URL
+                        globalEventSource = new EventSource(`/api/agent/status/${data.agent_type}/${data.session_id}`);
 
-                        eventSource.onopen = function() {
-                            console.log("SSE connection opened.");
-                            statusDiv.innerHTML += "SSE 连接已建立，等待状态更新...<br>";
+                        globalEventSource.onopen = () => {
+                            console.log(`SSE connection opened for ${data.agent_type}`);
+                            globalStatusDiv.innerHTML += "SSE 连接已建立，等待状态更新...<br>";
+                        }
+                        globalEventSource.onmessage = (event) => {
+                            console.log(`SSE message for ${data.agent_type}: ${event.data}`);
+                            globalStatusDiv.innerHTML += `${event.data}<br>`;
+                        }
+                        globalEventSource.onerror = (error) => {
+                            console.error(`Standard Agent (${data.agent_type}) EventSource failed:`, error);
+                            globalStatusDiv.innerHTML += "SSE 连接错误或已关闭。<br>";
+                            if (globalEventSource) globalEventSource.close();
                         };
-
-                        eventSource.onmessage = function(event) {
-                            console.log("SSE message received:", event.data);
-                            statusDiv.innerHTML += `${event.data}<br>`; // No "状态更新: " prefix to show raw message
-                        };
-
-                        eventSource.onerror = function(error) {
-                            console.error('EventSource failed:', error);
-                            statusDiv.innerHTML += "SSE 连接错误或已关闭。<br>";
-                            if (eventSource) { // Check if eventSource exists before closing
-                                eventSource.close();
-                            }
-                        };
-
                     } else {
                         const errorText = await response.text();
-                        statusDiv.innerHTML = `启动代理失败: ${response.status} ${response.statusText} - ${errorText}`;
+                        globalStatusDiv.innerHTML = `启动标准代理失败: ${response.status} ${response.statusText} - ${errorText}`;
                     }
                 } catch (error) {
-                    console.error('Error starting agent or connecting to SSE:', error);
-                    statusDiv.innerHTML = '启动代理或连接状态更新时发生错误。';
-                     if (eventSource) { // Also ensure cleanup on general error
-                        eventSource.close();
+                    console.error('Error starting standard agent:', error);
+                    globalStatusDiv.innerHTML = '启动标准代理时发生客户端错误。';
+                     if (globalEventSource) globalEventSource.close();
+                }
+            });
+        });
+
+        // Handler for "提交研究任务" buttons
+        document.querySelectorAll('.submit-research-btn').forEach(button => {
+            button.addEventListener('click', async () => {
+                const agentId = button.getAttribute('data-agent-id'); // This is "research_assistant"
+                const taskInput = document.getElementById(`research-task-input-${agentId}`);
+                const resultsOutputDiv = document.getElementById(`research-results-output-${agentId}`);
+                const taskDescription = taskInput.value.trim();
+
+                if (!taskDescription) {
+                    resultsOutputDiv.innerHTML = '<p style="color: red;">请输入研究任务描述！</p>';
+                    return;
+                }
+
+                resultsOutputDiv.innerHTML = '<p>正在提交研究任务，请稍候...</p>';
+
+                try {
+                    const response = await fetch('/api/agent/research_assistant/invoke', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ task_description: taskDescription })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        let htmlOutput = `<h4>研究结果 (Session: ${data.session_id})</h4>`;
+                        htmlOutput += `<p><strong>状态:</strong> ${data.status}</p>`;
+                        htmlOutput += `<p><strong>摘要:</strong> ${data.summary}</p>`;
+                        if (data.details && data.details.length > 0) {
+                            htmlOutput += '<strong>细节:</strong><ul>';
+                            data.details.forEach(detail => {
+                                htmlOutput += `<li>${detail}</li>`;
+                            });
+                            htmlOutput += '</ul>';
+                        }
+                        resultsOutputDiv.innerHTML = htmlOutput;
+                    } else {
+                        const errorData = await response.text();
+                        resultsOutputDiv.innerHTML = `<p style="color: red;">研究任务失败: ${response.status} (${response.statusText}) - ${errorData}</p>`;
                     }
+                } catch (error) {
+                    console.error('Error submitting research task:', error);
+                    resultsOutputDiv.innerHTML = '<p style="color: red;">提交研究任务时发生客户端错误。</p>';
                 }
             });
         });

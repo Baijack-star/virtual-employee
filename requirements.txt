@@ -1,2 +1,8 @@
 fastapi
+httpx
+openai-agents
+pydantic
+pytest
+pytest-asyncio
+python-dotenv
 uvicorn[standard]
