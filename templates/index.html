@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>虚拟员工平台</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+</head>
+<body>
+    <header>
+        <h1>虚拟员工平台</h1>
+    </header>
+    <main>
+        <div class="agent-card-container">
+            {% for agent in agents %}
+            <div class="agent-card" id="{{ agent.id }}">
+                <h2>{{ agent.name }}</h2>
+                <p>{{ agent.description }}</p>
+                <button class="start-agent-btn" data-agent-type="{{ agent.id }}">启动代理</button>
+            </div>
+            {% endfor %}
+        </div>
+        <div id="status-messages" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; background-color: #f9f9f9; min-height: 50px;">
+            <!-- SSE messages will appear here -->
+            请选择一个代理并点击“启动代理”按钮。
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2023 AI 代理平台</p>
+    </footer>
+    <script>
+        const statusDiv = document.getElementById('status-messages');
+        let eventSource = null; // Keep track of the EventSource object
+
+        document.querySelectorAll('.start-agent-btn').forEach(button => {
+            button.addEventListener('click', async () => {
+                const agentType = button.getAttribute('data-agent-type');
+                statusDiv.innerHTML = `请求启动 ${agentType} 类型的代理...`;
+
+                // Close any existing SSE connection
+                if (eventSource) {
+                    eventSource.close();
+                    console.log("Previous SSE connection closed.");
+                }
+
+                try {
+                    const response = await fetch(`/api/agent/start/${agentType}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        statusDiv.innerHTML = `后端响应: ${data.message} (Agent: ${data.agent_type}, Session ID: ${data.session_id})<br>`;
+
+                        // Connect to SSE endpoint, now including agent_type in the URL
+                        console.log(`Connecting to SSE for agent_type: ${data.agent_type}, session_id: ${data.session_id}`);
+                        // Corrected SSE URL to include agent_type as per updated app/main.py
+                        eventSource = new EventSource(`/api/agent/status/${data.agent_type}/${data.session_id}`);
+
+                        eventSource.onopen = function() {
+                            console.log("SSE connection opened.");
+                            statusDiv.innerHTML += "SSE 连接已建立，等待状态更新...<br>";
+                        };
+
+                        eventSource.onmessage = function(event) {
+                            console.log("SSE message received:", event.data);
+                            statusDiv.innerHTML += `${event.data}<br>`; // No "状态更新: " prefix to show raw message
+                        };
+
+                        eventSource.onerror = function(error) {
+                            console.error('EventSource failed:', error);
+                            statusDiv.innerHTML += "SSE 连接错误或已关闭。<br>";
+                            if (eventSource) { // Check if eventSource exists before closing
+                                eventSource.close();
+                            }
+                        };
+
+                    } else {
+                        const errorText = await response.text();
+                        statusDiv.innerHTML = `启动代理失败: ${response.status} ${response.statusText} - ${errorText}`;
+                    }
+                } catch (error) {
+                    console.error('Error starting agent or connecting to SSE:', error);
+                    statusDiv.innerHTML = '启动代理或连接状态更新时发生错误。';
+                     if (eventSource) { // Also ensure cleanup on general error
+                        eventSource.close();
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
