@@ -46,6 +46,8 @@ class ResearchAssistantResponse(BaseModel):
     collected_facts: list[dict] = Field(default_factory=list)
     error_message: str = None
 
+    model_config = {"extra": "forbid"}
+
 
 # --- Endpoints ---
 @app.get("/", response_class=HTMLResponse)

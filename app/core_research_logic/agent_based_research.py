@@ -75,6 +75,8 @@ class ResearchReport(BaseModel):
     error_message: str = None  # Optional error field
     collected_facts: list[dict] = []  # To store facts collected during research
 
+    model_config = {"extra": "forbid"}
+
 
 # --- Custom tool modification ---
 @function_tool
