@@ -2,8 +2,6 @@ import os
 import uuid
 import logging
 
-# import functools # Not strictly needed in this corrected version unless used elsewhere
-
 from app.core_research_logic.agent_based_research import (
     run_research,
     ResearchReport,
@@ -28,7 +26,6 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
     if not AGENTS_AVAILABLE:
         error_msg = "Core 'openai-agents' SDK is not available. Research functionality disabled."
         logger.critical(f"[{run_id}] {error_msg}")
-        # Ensure all fields expected by ResearchAssistantResponse are present
         return {
             "session_id": run_id,
             "summary": "Error: Research Module Not Available",
@@ -69,9 +66,7 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
             topic=topic, trace_group_id=run_id
         )
 
-        if (
-            not report_obj
-        ):  # Should ideally not happen if run_research always returns a ResearchReport
+        if not report_obj:
             logger.error(
                 f"[{run_id}] Core research logic returned a None object, which is unexpected."
             )
@@ -96,15 +91,12 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
             f"[{run_id}] Research logic completed. Report title: '{report_obj.title}'. Error: {report_obj.error_message or 'None'}"
         )
 
-        # Constructing the response summary
         response_summary = (
             report_obj.title if report_obj.title else "Research Task Processed"
         )
-
         if report_obj.error_message:
             response_summary = f"Error in Research: {report_obj.title or topic}"
-        elif report_obj.report:  # If no error and report exists, append snippet
-            # Corrected string replacement and concatenation:
+        elif report_obj.report:
             report_snippet = report_obj.report[:150].replace("\n", " ").strip()
             response_summary += f" - {report_snippet}..." if report_snippet else ""
 
@@ -114,7 +106,7 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
 
         if report_obj.collected_facts and not report_obj.error_message:
             response_details.append("Key Facts Found:")
-            for fact in report_obj.collected_facts[:3]:  # Show first 3 facts
+            for fact in report_obj.collected_facts[:3]:
                 response_details.append(
                     f"- {fact.get('fact')} (Source: {fact.get('source', 'N/A')})"
                 )
@@ -123,7 +115,7 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
             response_details.append("Report generated (see full report for content).")
         elif not response_details and report_obj.error_message:
             response_details.append(f"Details of error: {report_obj.error_message}")
-        elif not response_details:  # Fallback if no other details were added
+        elif not response_details:
             response_details.append("No specific details to summarize here.")
 
         return {
@@ -135,14 +127,14 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
             ),
             "title": report_obj.title,
             "outline": report_obj.outline,
-            "full_report_content": report_obj.report,  # Changed from 'report' to 'full_report_content'
+            "full_report_content": report_obj.report,
             "sources": report_obj.sources,
             "word_count": report_obj.word_count,
             "collected_facts": report_obj.collected_facts,
             "error_message": report_obj.error_message,
         }
 
-    except ImportError as e:  # Should be caught by AGENTS_AVAILABLE, but as a safeguard
+    except ImportError as e:
         error_msg = f"Missing critical component for research during execution: {e}."
         logger.critical(f"[{run_id}] {error_msg}", exc_info=True)
         return {

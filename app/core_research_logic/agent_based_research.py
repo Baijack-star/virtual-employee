@@ -3,15 +3,12 @@ import uuid  # Keep for potential future use
 from datetime import datetime
 import logging
 
-# Configure basic logging - ensure this is done only once if multiple modules import it
-# A common pattern is to get logger by name and let application entry point configure root logger.
 logger = logging.getLogger(__name__)
-if not logging.getLogger().hasHandlers():  # Check root logger
+if not logging.getLogger().hasHandlers():
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
     )
-
 
 try:
     from agents import (
@@ -22,7 +19,6 @@ try:
         handoff,
         trace,
     )
-
     AGENTS_AVAILABLE = True
     logger.info("'agents' module successfully imported.")
 except ImportError as e:
@@ -30,7 +26,6 @@ except ImportError as e:
     logger.error(
         f"Critical: 'agents' module not found. Error: {e}. Please ensure 'openai-agents' is installed for full functionality."
     )
-    # This will halt execution if the module is critical at import time.
     raise ImportError(
         "Core 'agents' module (openai-agents) not found. Please install the required dependencies."
     ) from e
