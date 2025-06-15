@@ -82,9 +82,7 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
         if report_obj.error_message:
             response_summary = f"Error in Research: {report_obj.title or topic}"
         elif report_obj.report: # Add a snippet of the report to the summary if no error
-            response_summary += " - " + report_obj.report[:150].replace('
-', ' ') + "..."
-
+            response_summary += " - " + report_obj.report[:150].replace('\n', ' ') + "..."
 
         response_details = []
         if report_obj.outline: # Outline might be empty in case of error

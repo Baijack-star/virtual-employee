@@ -113,8 +113,3 @@ if __name__ == "__main__":
     load_dotenv()
     logger.info("Starting Uvicorn server for main app with .env loaded.")
     uvicorn.run("app.main:app", app=None, host="0.0.0.0", port=8000, reload=True, use_colors=True)
-
-EOL
-
-echo "Step 1: Corrected syntax error in event_generator in app/main.py."
-echo "Ensured all yielded f-strings are properly quoted and end with double newlines."

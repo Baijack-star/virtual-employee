@@ -90,15 +90,15 @@ research_agent = Agent(
 editor_agent = Agent(
     name="Editor Agent",
     handoff_description="A senior researcher who writes comprehensive research reports",
-    instructions="You are a senior researcher tasked with writing a cohesive report for a research query. "
-    "You will be provided with the original query, and some initial research done by a research "
-    "assistant (including collected facts).
-"
-    "You should first come up with an outline for the report that describes the structure and "
-    "flow of the report. Then, generate the report and return that as your final output.
-"
-    "The final output should be in markdown format, and it should be lengthy and detailed. Aim "
-    "for 5-10 pages of content, at least 1000 words. Incorporate the collected facts appropriately.",
+    instructions=(
+        "You are a senior researcher tasked with writing a cohesive report for a research query. "
+        "You will be provided with the original query, and some initial research done by a research "
+        "assistant (including collected facts). "
+        "You should first come up with an outline for the report that describes the structure and "
+        "flow of the report. Then, generate the report and return that as your final output. "
+        "The final output should be in markdown format, and it should be lengthy and detailed. Aim "
+        "for 5-10 pages of content, at least 1000 words. Incorporate the collected facts appropriately."
+    ),
     model="gpt-4o-mini",
     output_type=ResearchReport,
 )
