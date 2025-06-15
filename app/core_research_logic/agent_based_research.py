@@ -1,28 +1,18 @@
 import os
 import uuid  # Keep for potential future use
-import uuid  # Keep for potential future use
-import asyncio
 from datetime import datetime
 import logging
 
+# Configure basic logging - ensure this is done only once if multiple modules import it
+# A common pattern is to get logger by name and let application entry point configure root logger.
 logger = logging.getLogger(__name__)
-if not logging.getLogger().hasHandlers():
+if not logging.getLogger().hasHandlers():  # Check root logger
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
     )
 
-from dotenv import load_dotenv
-import logging  # Using logging instead of print for backend logic
 
-# Configure basic logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
-)
-
-# Attempt to import from openai_agents.
-# This will be added to requirements.txt in a later step.
 try:
     from agents import (
         Agent,
@@ -31,7 +21,6 @@ try:
         function_tool,
         handoff,
         trace,
-        trace,  # trace might be UI specific or SDK specific, need to check its usage
     )
 
     AGENTS_AVAILABLE = True
@@ -41,28 +30,18 @@ except ImportError as e:
     logger.error(
         f"Critical: 'agents' module not found. Error: {e}. Please ensure 'openai-agents' is installed for full functionality."
     )
-    raise ImportError(
-        "Core 'agents' module (openai-agents) not found. Please install the required dependencies."
-    ) from e
-    logging.error(
-        f"Critical: 'agents' module not found. Error: {e}. Please ensure 'openai-agents' is installed for full functionality."
-    )
-    # For a backend service, it's often better to fail fast if a core dependency is missing.
-    # Re-raising helps to signal this problem clearly during startup or deployment.
+    # This will halt execution if the module is critical at import time.
     raise ImportError(
         "Core 'agents' module (openai-agents) not found. Please install the required dependencies."
     ) from e
 
 from pydantic import BaseModel
 
-# load_dotenv() # Best called at application entry point, e.g., in FastAPI main.py or via Docker env vars
-
 
 class ResearchPlan(BaseModel):
     topic: str
     search_queries: list[str]
     focus_areas: list[str]
-    model_config = {"extra": "forbid"}
 
 
 class ResearchReport(BaseModel):
@@ -71,25 +50,16 @@ class ResearchReport(BaseModel):
     report: str
     sources: list[str]
     word_count: int
-    error_message: str = None  # Optional error field
-    collected_facts: list[dict] = []  # To store facts collected during research
-
-    model_config = {"extra": "forbid"}
+    error_message: str = None
+    collected_facts: list[dict] = []
 
 
-# --- Custom tool modification ---
 @function_tool
 async def save_important_fact(
     fact: str, source: str = None, context: dict = None
 ) -> str:
-    """Save an important fact discovered during research.
-    Appends to 'collected_facts_list' within the provided 'context' dictionary.
-    """
     if context is None or "collected_facts_list" not in context:
         logger.warning(
-            "'context' with 'collected_facts_list' not provided to save_important_fact. Fact not saved."
-        )
-        logging.warning(
             "'context' with 'collected_facts_list' not provided to save_important_fact. Fact not saved."
         )
         return "Fact received, but no context or list provided to save it."
@@ -99,7 +69,6 @@ async def save_important_fact(
         "fact": fact,
         "source": source or "Not specified",
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
     }
 
     if isinstance(collected_facts_list, list):
@@ -108,9 +77,6 @@ async def save_important_fact(
         return f"Fact saved: {fact}"
     else:
         logger.error(
-            f"Failed to save fact: 'collected_facts_list' in context is not a list. Type: {type(collected_facts_list)}"
-        )
-        logging.error(
             f"Failed to save fact: 'collected_facts_list' in context is not a list. Type: {type(collected_facts_list)}"
         )
         return "Failed to save fact: 'collected_facts_list' in context is not a list."
@@ -137,17 +103,6 @@ research_agent = (
     if AGENTS_AVAILABLE
     else None
 )  # Define as None if SDK not available
-research_agent = Agent(
-    name="Research Agent",
-    instructions="You are a research assistant. Given a search term, you search the web for that term and "
-    "produce a concise summary of the results. The summary must 2-3 paragraphs and less than 300 "
-    "words. Capture the main points. Write succintly, no need to have complete sentences or good "
-    "grammar. This will be consumed by someone synthesizing a report, so its vital you capture the "
-    "essence and ignore any fluff. Do not include any additional commentary other than the summary "
-    "itself.",
-    model="gpt-4o-mini",  # Ensure OPENAI_API_KEY is set in environment
-    tools=research_agent_tools_list,
-)
 
 editor_agent = (
     Agent(
@@ -195,26 +150,7 @@ triage_agent = (
     else None
 )
 
-triage_agent = Agent(
-    name="Triage Agent",
-    instructions="""You are the coordinator of this research operation. Your job is to:
-    1. Understand the user's research topic
-    2. Create a research plan with the following elements:
-       - topic: A clear statement of the research topic
-       - search_queries: A list of 3-5 specific search queries that will help gather information
-       - focus_areas: A list of 3-5 key aspects of the topic to investigate
-    3. Hand off to the Research Agent to collect information. The Research Agent will use tools, including one to save important facts.
-    4. After research is complete, hand off to the Editor Agent who will write a comprehensive report using the research and collected facts.
 
-    Make sure to return your plan in the expected structured format with topic, search_queries, and focus_areas.
-    """,
-    handoffs=[handoff(research_agent), handoff(editor_agent)],
-    model="gpt-4o-mini",
-    output_type=ResearchPlan,
-)
-
-
-# --- Main research function (modified) ---
 async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport:
     run_id = trace_group_id or str(uuid.uuid4())
     logger.info(f"Starting research for topic: '{topic}' (Run ID: {run_id})")
@@ -248,35 +184,30 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
             sources=[],
             word_count=0,
             collected_facts=[],
-            outline=[],
-            sources=[],
-            word_count=0,
         )
 
     current_run_collected_facts = []
     tool_context = {"collected_facts_list": current_run_collected_facts}
     final_report_obj: ResearchReport = None
     trace_cm = None
-    if AGENTS_AVAILABLE and "trace" in globals():
+
+    if "trace" in globals():  # Check if trace was successfully imported
         try:
             trace_cm = trace("Research Operation", group_id=run_id)
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 f"[{run_id}] Failed to initialize 'trace' context manager: {e}. Proceeding without it."
             )
 
     async def research_workflow():
         nonlocal final_report_obj  # Allow modification of outer scope variable
         logger.info(f"[{run_id}] Triage Agent: Planning research approach...")
-        nonlocal final_report_obj  # Allow modification of outer scope variable
-        logging.info(f"[{run_id}] Triage Agent: Planning research approach...")
 
         try:
             triage_result = await Runner.run(
                 triage_agent,
                 f"Research this topic thoroughly: {topic}. This research will be used to create a comprehensive research report.",
-                # If Runner.run supports a context argument for tools:
-                context=tool_context,  # This is an assumption about openai-agents SDK
+                context=tool_context,  # Assuming Runner.run or tools can access this context
             )
 
             if not hasattr(triage_result, "final_output") or not isinstance(
@@ -294,34 +225,17 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                     error_message="Triage agent output was not a valid ResearchPlan.",
                     collected_facts=current_run_collected_facts,
                 )
-            if not hasattr(triage_result, "final_output") or not isinstance(
-                triage_result.final_output, ResearchPlan
-            ):
-                logging.error(
-                    f"[{run_id}] Triage agent did not return a valid ResearchPlan. Output: {triage_result.final_output}"
-                )
-                final_report_obj = ResearchReport(
-                    title=f"Triage Error for {topic}",
-                    outline=[],
-                    report="Triage agent output was not a valid ResearchPlan.",
-                    sources=[],
-                    word_count=0,
-                    error_message="Triage agent output was not a valid ResearchPlan.",
-                    collected_facts=current_run_collected_facts,
-                )
                 return
 
             research_plan = triage_result.final_output
-            logging.info(
+            logger.info(
                 f"[{run_id}] Research Plan generated: {research_plan.dict(exclude_none=True)}"
             )
 
-            # After triage_agent (which includes handoffs to research_agent and editor_agent) runs,
-            # the final output should ideally be from the editor_agent.
-            # We need to correctly extract the ResearchReport from the execution history or final output.
+            # Extract final report from the agent chain's history or final output
             if triage_result and hasattr(triage_result, "history"):
                 editor_output_found = False
-                for item in reversed(triage_result.history):  # Check from the end
+                for item in reversed(triage_result.history):
                     if (
                         hasattr(item, "agent_name")
                         and item.agent_name == "Editor Agent"
@@ -330,20 +244,19 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                     ):
                         final_report_obj = item.output
                         editor_output_found = True
-                        logging.info(
+                        logger.info(
                             f"[{run_id}] Editor Agent output successfully retrieved from history."
                         )
                         break
                 if not editor_output_found and isinstance(
                     triage_result.final_output, ResearchReport
                 ):
-                    # If not found in history, check if the chain's final output is the report
                     final_report_obj = triage_result.final_output
-                    logging.info(
+                    logger.info(
                         f"[{run_id}] Editor Agent output retrieved as final output of the chain."
                     )
                 elif not editor_output_found:
-                    logging.warning(
+                    logger.warning(
                         f"[{run_id}] Could not find ResearchReport from Editor Agent in history or final output."
                     )
                     final_report_obj = ResearchReport(
@@ -355,8 +268,8 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                         error_message="Editor report not found.",
                         collected_facts=current_run_collected_facts,
                     )
-            else:  # Fallback if no history or unexpected triage_result structure
-                logging.warning(
+            else:
+                logger.warning(
                     f"[{run_id}] Triage result has no history or unexpected structure."
                 )
                 final_report_obj = ResearchReport(
@@ -376,10 +289,6 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                 f"[{run_id}] Error during research workflow execution: {e}",
                 exc_info=True,
             )
-            logging.error(
-                f"[{run_id}] Error during research workflow execution: {e}",
-                exc_info=True,
-            )
             final_report_obj = ResearchReport(
                 title=f"Error during research for {topic}",
                 outline=[],
@@ -387,7 +296,6 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                 sources=[],
                 word_count=0,
                 error_message=f"Workflow Error: {str(e)}",
-                collected_facts=current_run_collected_facts,
                 collected_facts=current_run_collected_facts,
             )
 
@@ -400,37 +308,14 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
     if final_report_obj:
         # Ensure the collected facts from this run are on the final report object
         final_report_obj.collected_facts = current_run_collected_facts
-    else:  # Should not happen if workflow always assigns to final_report_obj
+    else:  # Should ideally not be reached if research_workflow always assigns
         final_report_obj = ResearchReport(
             title=f"Critical Error for {topic}",
-            report="No report object generated.",
+            report="No report object was generated due to a critical failure.",
             outline=[],
             sources=[],
             word_count=0,
             error_message="Critical: No report object generated.",
             collected_facts=current_run_collected_facts,
         )
-
     return final_report_obj
-
-
-# Module-level test function (commented out for subtask)
-# async def main_test_module():
-#     load_dotenv()
-#     if not os.getenv("OPENAI_API_KEY"):
-#         logging.error("OPENAI_API_KEY not set. Please set it to run the test.")
-#         return
-#
-#     test_topic = "Impact of Quantum Computing on Cybersecurity"
-#     report = await run_research(test_topic, trace_group_id="test-qc-cyber-001")
-#
-#     logging.info(f"--- Test Report for '{test_topic}' ---")
-#     if report.error_message:
-#         logging.error(f"Error in report generation: {report.error_message}")
-#     logging.info(f"Title: {report.title}")
-#     logging.info(f"Word Count: {report.word_count}")
-#     # logging.info(f"Report Preview: {report.report[:300]}...")
-#     # logging.info(f"Collected Facts: {report.collected_facts}")
-
-# if __name__ == "__main__":
-#     asyncio.run(main_test_module())

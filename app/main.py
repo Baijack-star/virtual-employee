@@ -8,6 +8,7 @@ import uuid
 import asyncio
 import logging  # Added logging
 
+# Assuming the wrapper is in app.agents.openai_research_wrapper
 from app.agents.openai_research_wrapper import execute_openai_research
 
 logging.basicConfig(
@@ -45,8 +46,6 @@ class ResearchAssistantResponse(BaseModel):
     word_count: int = None
     collected_facts: list[dict] = Field(default_factory=list)
     error_message: str = None
-
-    model_config = {"extra": "forbid"}
 
 
 # --- Endpoints ---
