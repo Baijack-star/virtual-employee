@@ -65,7 +65,6 @@ class ResearchPlan(BaseModel):
     model_config = {"extra": "forbid"}
 
 
-
 class ResearchReport(BaseModel):
     title: str
     outline: list[str]
@@ -335,9 +334,6 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                             f"[{run_id}] Editor Agent output successfully retrieved from history."
                         )
                         break
-                if not editor_output_found and isinstance(
-                    triage_result.final_output, ResearchReport
-                ):
                 if not editor_output_found and isinstance(
                     triage_result.final_output, ResearchReport
                 ):

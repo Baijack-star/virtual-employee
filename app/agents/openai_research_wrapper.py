@@ -44,13 +44,6 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
     )
 
     if not AGENTS_AVAILABLE:
-    logger.info(
-        f"[{run_id}] Attempting to execute OpenAI research for topic: '{topic}'"
-    )
-
-    if (
-        not AGENTS_AVAILABLE
-    ):  # Check if the core 'agents' module was imported successfully
         error_msg = "Core 'openai-agents' SDK is not available. Research functionality disabled."
         logger.critical(f"[{run_id}] {error_msg}")
         return {
@@ -59,7 +52,6 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
             "details": [error_msg],
             "status": "error_configuration",
             "title": "Error: Module Unavailable",
-            "title": "Error",  # Added to match ResearchReport structure more closely for Pydantic conversion
             "outline": [],
             "full_report_content": error_msg,
             "sources": [],
@@ -72,9 +64,6 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
     # as per its current design. If OPENAI_API_KEY is not set, run_research returns a specific ResearchReport.
     # This wrapper could also check it here if we want to prevent calling run_research at all.
     # For now, let run_research handle it as it's already implemented there.
-            "error_message": error_msg,
-        }
-
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:  # Explicit API key check
         error_msg = "OPENAI_API_KEY environment variable is not set."
@@ -99,9 +88,6 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
         )
         report_obj: ResearchReport = await run_research(
             topic=topic, trace_group_id=run_id
-        )
-        logger.info(
-            f"[{run_id}] Calling core research logic (run_research) for topic: '{topic}'"
         )
         # run_research is expected to return a ResearchReport Pydantic model instance
         report_obj: ResearchReport = await run_research(
@@ -170,11 +156,9 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
             )
 
         response_details = []
-        if report_obj.outline:
         if report_obj.outline:  # Outline might be empty in case of error
             response_details.append(f"Outline: {', '.join(report_obj.outline)}")
 
-        if report_obj.collected_facts and not report_obj.error_message:
         # Add some collected facts to details if available, and no major error
         if report_obj.collected_facts and not report_obj.error_message:
             response_details.append("Key Facts Found:")
@@ -182,15 +166,8 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
                 response_details.append(
                     f"- {fact.get('fact')} (Source: {fact.get('source', 'N/A')})"
                 )
-            for fact in report_obj.collected_facts[
-                :3
-            ]:  # Show first 3 facts as part of details
-                response_details.append(
-                    f"- {fact.get('fact')} (Source: {fact.get('source', 'N/A')})"
-                )
 
         if not response_details and report_obj.report and not report_obj.error_message:
-            response_details.append("Report generated (see full report for content).")
             response_details.append("Report generated (see full report for content).")
         elif not response_details and report_obj.error_message:
             response_details.append(f"Details of error: {report_obj.error_message}")
