@@ -2,6 +2,7 @@ fastapi
 httpx
 openai-agents
 pydantic
+Jinja2
 pytest
 pytest-asyncio
 python-dotenv
