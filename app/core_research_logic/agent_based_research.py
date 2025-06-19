@@ -73,7 +73,7 @@ class SaveFactToolContext(BaseModel):
 
 @function_tool
 async def save_important_fact(
-    fact: str, source: str = None, context: dict = None
+    fact: str, source: str = None, context: SaveFactToolContext = None
 ) -> str:
     if context is None or not isinstance(context, SaveFactToolContext):
         logger.warning(
