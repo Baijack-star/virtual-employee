@@ -1,5 +1,6 @@
 fastapi
 httpx
+Jinja2
 openai-agents
 pydantic
 pytest
