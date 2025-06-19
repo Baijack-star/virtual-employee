@@ -48,6 +48,8 @@ class ResearchPlan(BaseModel):
     search_queries: list[str]
     focus_areas: list[str]
 
+    model_config = {"extra": "forbid"}
+
 
 class ResearchReport(BaseModel):
     title: str
@@ -57,6 +59,8 @@ class ResearchReport(BaseModel):
     word_count: int
     error_message: str = None
     collected_facts: list[dict] = []
+
+    model_config = {"extra": "forbid"}
 
 
 class SaveFactToolContext(BaseModel):
