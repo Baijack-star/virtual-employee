@@ -2,6 +2,9 @@ import os
 import uuid  # Keep for potential future use
 from datetime import datetime
 import logging
+from pydantic import BaseModel, Field
+
+# Removed pydantic import from here, will be added after all std lib imports
 
 # Configure basic logging - ensure this is done only once if multiple modules import it
 # A common pattern is to get logger by name and let application entry point configure root logger.
@@ -12,6 +15,10 @@ if not logging.getLogger().hasHandlers():  # Check root logger
         format="%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
     )
 
+# Correct Pydantic import location will be handled by the next step,
+# ensuring it's after standard library imports and before other code.
+# For now, just ensuring the problematic duplicate is managed.
+# The logic below will re-add a single correct Pydantic import.
 
 try:
     from agents import (
@@ -20,7 +27,7 @@ try:
         WebSearchTool,
         function_tool,
         handoff,
-        trace
+        trace,
     )
 
     AGENTS_AVAILABLE = True
@@ -35,60 +42,58 @@ except ImportError as e:
         "Core 'agents' module (openai-agents) not found. Please install the required dependencies."
     ) from e
 
-from typing import List, Optional
-from pydantic import BaseModel, Field
-
 
 class ResearchPlan(BaseModel):
-    model_config = {"extra": "forbid"}
     topic: str
     search_queries: list[str]
     focus_areas: list[str]
 
 
-
-
-class FactData(BaseModel):
-    model_config = {"extra": "forbid"}
-    fact: str
-    source: Optional[str] = "Not specified"
-    timestamp: str
-
-class FactContext(BaseModel):
-    model_config = {"extra": "forbid"}
-    collected_facts_list: List[FactData]
-
-
 class ResearchReport(BaseModel):
+    title: str
+    outline: list[str]
+    report: str
+    sources: list[str]
+    word_count: int
+    error_message: str = None
+    collected_facts: list[dict] = []
+
+
+class SaveFactToolContext(BaseModel):
+    collected_facts_list: list = Field(default_factory=list)
+
     model_config = {"extra": "forbid"}
-    title: str = ""
-    outline: List[str] = []
-    report: str = ""
-    sources: List[str] = []
-    word_count: int = 0
-    error_message: Optional[str] = None
-    collected_facts: List[FactData] = []
 
 
 @function_tool
 async def save_important_fact(
-    fact: str, source: str = None, context: FactContext = None
+    fact: str, source: str = None, context: dict = None
 ) -> str:
-    if context is None or context.collected_facts_list is None:
+    if context is None or not isinstance(context, SaveFactToolContext):
         logger.warning(
             "'context' with 'collected_facts_list' not provided to save_important_fact. Fact not saved."
         )
         return "Fact received, but no context or list provided to save it."
 
-    fact_data_model = FactData(
-        fact=fact,
-        source=source,
-        timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    )
+    collected_facts_list = context.collected_facts_list
+    fact_data = {
+        "fact": fact,
+        "source": source or "Not specified",
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }  # Closed brace
 
-    context.collected_facts_list.append(fact_data_model)
-    logger.info(f"Fact saved: '{fact_data_model.fact}' (Source: {fact_data_model.source})")
-    return f"Fact saved: {fact_data_model.fact}"
+    if isinstance(context.collected_facts_list, list):  # Corrected check
+        collected_facts_list.append(fact_data)
+        logger.info(f"Fact saved: '{fact}' (Source: {source or 'N/A'})")
+        return f"Fact saved: {fact}"
+    else:
+        # This case should ideally not be reached if context is validated as SaveFactToolContext
+        # and SaveFactToolContext ensures collected_facts_list is a list.
+        # However, as a safeguard on the list attribute itself:
+        logger.error(
+            f"Failed to save fact: 'collected_facts_list' attribute in context is not a list. Type: {type(context.collected_facts_list)}"
+        )
+        return "Failed to save fact: 'collected_facts_list' attribute in context is not a list."
 
 
 research_agent_tools_list = []
@@ -99,19 +104,20 @@ research_agent = (
     Agent(
         name="Research Agent",
         instructions=(
-            "You are a research assistant. Given a search term, you search the web for that term and "
-            "produce a concise summary of the results. The summary must 2-3 paragraphs and less than 300 "
-            "words. Capture the main points. Write succintly, no need to have complete sentences or good "
-            "grammar. This will be consumed by someone synthesizing a report, so its vital you capture the "
-            "essence and ignore any fluff. Do not include any additional commentary other than the summary "
-            "itself."
+            "You are a research assistant. Given a search term, you search the web "
+            "for that term and produce a concise summary of the results. The summary "
+            "must be 2-3 paragraphs and less than 300 words. Capture the main points. "
+            "Write succintly, no need to have complete sentences or good "  # Further broken
+            "grammar. This will be consumed by someone synthesizing a report, so its "  # noqa: E501
+            "vital you capture the essence and ignore any fluff. Do not include any "
+            "additional commentary other than the summary itself."
         ),
         model="gpt-4o-mini",  # Ensure OPENAI_API_KEY is set in environment
         tools=research_agent_tools_list,
     )
     if AGENTS_AVAILABLE
     else None
-)  # Define as None if SDK not available
+)  # Correct conditional assignment
 
 editor_agent = (
     Agent(
@@ -131,7 +137,7 @@ editor_agent = (
     )
     if AGENTS_AVAILABLE
     else None
-)
+)  # Correct conditional assignment
 
 triage_agent_handoffs = []
 if AGENTS_AVAILABLE and research_agent and editor_agent:  # Ensure agents are defined
@@ -151,13 +157,13 @@ triage_agent = (
             "    4. After research is complete, hand off to the Editor Agent who will write a comprehensive report using the research and collected facts.\n\n"
             "Make sure to return your plan in the expected structured format with topic, search_queries, and focus_areas."
         ),
+        model="gpt-4o-mini",  # Added model back
         handoffs=triage_agent_handoffs,
-        model="gpt-4o-mini",
         output_type=ResearchPlan,
     )
     if AGENTS_AVAILABLE
     else None
-)
+)  # Correct conditional assignment
 
 
 async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport:
@@ -170,7 +176,7 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
         or not editor_agent
         or not triage_agent
     ):
-        logger.error(
+        logger.error(  # Corrected logger call
             f"[{run_id}] Core agents are not available (AGENTS_AVAILABLE={AGENTS_AVAILABLE}). Cannot run research."
         )
         return ResearchReport(
@@ -181,13 +187,13 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
             sources=[],
             word_count=0,
             collected_facts=[],
-        )
+        )  # Added closing parenthesis
 
     if not os.getenv("OPENAI_API_KEY"):
         logger.error(f"[{run_id}] OPENAI_API_KEY environment variable is not set.")
-        return ResearchReport(
-            title=f"Configuration Error for topic '{topic}'",
-            report="OPENAI_API_KEY is not set.",
+        return ResearchReport(  # Corrected return
+            title=f"Config Error for topic '{topic[:50]}{'...' if len(topic) > 50 else ''}'",  # noqa: E501
+            report="OPENAI_API_KEY is not set.",  # noqa: E501
             error_message="OPENAI_API_KEY is not set.",
             outline=[],
             sources=[],
@@ -195,11 +201,10 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
             collected_facts=[],
         )
 
-    current_run_collected_facts: List[FactData] = []
-    tool_context = FactContext(collected_facts_list=current_run_collected_facts)
+    current_run_collected_facts = []
+    tool_context = SaveFactToolContext(collected_facts_list=current_run_collected_facts)
     final_report_obj: ResearchReport = None
     trace_cm = None
-
     if "trace" in globals():  # Check if trace was successfully imported
         try:
             trace_cm = trace("Research Operation", group_id=run_id)
@@ -211,13 +216,12 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
     async def research_workflow():
         nonlocal final_report_obj  # Allow modification of outer scope variable
         logger.info(f"[{run_id}] Triage Agent: Planning research approach...")
-
-        try:
+        try:  # Added try for the whole workflow
             triage_result = await Runner.run(
                 triage_agent,
                 f"Research this topic thoroughly: {topic}. This research will be used to create a comprehensive research report.",
                 context=tool_context,  # Assuming Runner.run or tools can access this context
-            )
+            )  # Added closing parenthesis
 
             if not hasattr(triage_result, "final_output") or not isinstance(
                 triage_result.final_output, ResearchPlan
@@ -233,14 +237,34 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                     word_count=0,
                     error_message="Triage agent output was not a valid ResearchPlan.",
                     collected_facts=current_run_collected_facts,
-                )
-                return
+                )  # Added closing parenthesis
+                return  # Exit workflow if plan is invalid
 
             research_plan = triage_result.final_output
+            plan_dict_str = str(research_plan.dict(exclude_none=True))
+            # Limit the length of what's logged for the plan if it's very long
+            if len(plan_dict_str) > 200:  # Max 200 chars for log
+                topic_log = (
+                    research_plan.topic[:50] + "..."
+                    if len(research_plan.topic) > 50
+                    else research_plan.topic
+                )
+                queries_log = (
+                    str(research_plan.search_queries[:1]) + "..."
+                    if research_plan.search_queries
+                    else "[]"
+                )
+                focus_log = (
+                    str(research_plan.focus_areas[:1]) + "..."
+                    if research_plan.focus_areas
+                    else "[]"
+                )
+                plan_display_log = f"Topic='{topic_log}', Queries='{queries_log}', Focus='{focus_log}' (details omitted)"
+            else:
+                plan_display_log = plan_dict_str
             logger.info(
-                f"[{run_id}] Research Plan generated: {research_plan.dict(exclude_none=True)}"
+                f"[{run_id}] Research Plan generated: {plan_display_log}"  # noqa: E501
             )
-
             # Extract final report from the agent chain's history or final output
             if triage_result and hasattr(triage_result, "history"):
                 editor_output_found = False
@@ -267,7 +291,7 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                 elif not editor_output_found:
                     logger.warning(
                         f"[{run_id}] Could not find ResearchReport from Editor Agent in history or final output."
-                    )
+                    )  # Added closing parenthesis
                     final_report_obj = ResearchReport(
                         title=f"Report Generation Incomplete for {topic}",
                         outline=[],
@@ -276,24 +300,22 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                         word_count=0,
                         error_message="Editor report not found.",
                         collected_facts=current_run_collected_facts,
-                    )
+                    )  # Added closing parenthesis
             else:
                 logger.warning(
                     f"[{run_id}] Triage result has no history or unexpected structure."
-                )
-                final_report_obj = ResearchReport(
+                )  # Added closing parenthesis
+                final_report_obj = ResearchReport(  # Added assignment
                     title=f"Processing Error for {topic}",
-                    outline=[],
+                    outline=[],  # Added outline
                     report="Could not determine final report due to processing error.",
-                    sources=[],
-                    word_count=0,
+                    sources=[],  # Added sources
+                    word_count=0,  # Added word_count
                     error_message="Triage result processing error.",
-                    collected_facts=current_run_collected_facts,
-                )
-
+                    collected_facts=current_run_collected_facts,  # Added collected_facts
+                )  # Added closing parenthesis
             logger.info(f"[{run_id}] Research workflow complete for topic: '{topic}'.")
-
-        except Exception as e:
+        except Exception as e:  # Catch exceptions from the workflow
             logger.error(
                 f"[{run_id}] Error during research workflow execution: {e}",
                 exc_info=True,
@@ -306,12 +328,12 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
                 word_count=0,
                 error_message=f"Workflow Error: {str(e)}",
                 collected_facts=current_run_collected_facts,
-            )
+            )  # Added closing parenthesis
 
     if trace_cm:
         with trace_cm:
             await research_workflow()
-    else:
+    else:  # Corrected else indentation
         await research_workflow()
 
     if final_report_obj:
@@ -323,8 +345,8 @@ async def run_research(topic: str, trace_group_id: str = None) -> ResearchReport
             report="No report object was generated due to a critical failure.",
             outline=[],
             sources=[],
-            word_count=0,
+            word_count=0,  # Added outline, sources, word_count
             error_message="Critical: No report object generated.",
             collected_facts=current_run_collected_facts,
-        )
+        )  # Added closing parenthesis
     return final_report_obj

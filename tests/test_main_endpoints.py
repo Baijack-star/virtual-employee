@@ -70,8 +70,8 @@ async def test_agent_status_sse_endpoint_exists(client: AsyncClient):
             # For a simple check, just ensuring the connection opens and headers are right is often enough.
             # Example:
             # async for line in response.aiter_lines():
-            #    assert "data:" in line # Check for SSE data format
-            #    break # Only check the first line for this basic test
+            #    assert "data:" in line  # Check for SSE data format
+            #    break  # Only check the first line for this basic test
             await response.aclose()  # Ensure the stream is closed promptly
     except Exception as e:
         pytest.fail(f"SSE endpoint test failed: {e}")

@@ -2,7 +2,7 @@ import os
 import uuid
 import logging
 
-# import functools # Not strictly needed in this corrected version unless used elsewhere
+# import functools  # Not strictly needed in this corrected version unless used elsewhere
 
 from app.core_research_logic.agent_based_research import (
     run_research,
@@ -115,8 +115,10 @@ async def execute_openai_research(topic: str, run_id: str = None) -> dict:
         if report_obj.collected_facts and not report_obj.error_message:
             response_details.append("Key Facts Found:")
             for fact in report_obj.collected_facts[:3]:  # Show first 3 facts
+                fact_text = fact.get("fact", "N/A")
+                source_text = fact.get("source", "N/A")
                 response_details.append(
-                    f"- {fact.get('fact')} (Source: {fact.get('source', 'N/A')})"
+                    f"- {fact_text} (Source: {source_text})"  # noqa: E501
                 )
 
         if not response_details and report_obj.report and not report_obj.error_message:
