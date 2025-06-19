@@ -68,6 +68,8 @@ class SaveFactToolContext(BaseModel):
 
     model_config = {"extra": "forbid"}
 
+    model_config = {"extra": "forbid"}
+
 
 @function_tool
 async def save_important_fact(
