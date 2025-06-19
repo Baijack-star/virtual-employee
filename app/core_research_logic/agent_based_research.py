@@ -20,7 +20,7 @@ try:
         WebSearchTool,
         function_tool,
         handoff,
-        trace,
+        trace
     )
 
     AGENTS_AVAILABLE = True
@@ -44,6 +44,8 @@ class ResearchPlan(BaseModel):
     topic: str
     search_queries: list[str]
     focus_areas: list[str]
+
+
 
 
 class FactData(BaseModel):
